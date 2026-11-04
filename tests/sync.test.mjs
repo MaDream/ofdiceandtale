@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,access} from 'node:fs/promises';
+import {mkdtemp,access,mkdir,readFile,writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {selectPair,parseDescription,createDrive,collect,build} from '../scripts/sync.mjs';
@@ -71,4 +71,19 @@ test('failed source reads leave output untouched',async()=>{
   const root=await mkdtemp(join(tmpdir(),'odt-sync-test-'));
   await assert.rejects(build({root,drive:{list:async()=>{throw Error('Drive unavailable');}}}),/Drive unavailable/);
   await assert.rejects(access(join(root,'dist')));
+});
+
+test('publishing changed scripts gives browsers a new asset URL',async()=>{
+  const root=await mkdtemp(join(tmpdir(),'odt-cache-test-'));
+  await mkdir(join(root,'assets'));await mkdir(join(root,'data'));
+  for(const [file,body] of Object.entries({'index.html':'<link href="styles.css"><script src="app.js"></script>','app.js':'first','styles.css':'body{}','CNAME':'example.com','assets/logo.png':'logo','data/catalog.json':'{"categories":[]}'}))await writeFile(join(root,file),body);
+  await build({root,offline:true});
+  const before=await readFile(join(root,'dist/index.html'),'utf8');
+  const script=before.match(/src="([^"]+)"/)[1];
+  assert.match(script,/^app\.[a-f0-9]{12}\.js$/);
+  assert.equal(await readFile(join(root,'dist',script),'utf8'),'first');
+  await writeFile(join(root,'app.js'),'second');await build({root,offline:true});
+  const after=await readFile(join(root,'dist/index.html'),'utf8');
+  assert.notEqual(after.match(/src="([^"]+)"/)[1],script);
+  assert.equal(after.match(/href="([^"]+)"/)[1],before.match(/href="([^"]+)"/)[1]);
 });

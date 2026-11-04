@@ -1,6 +1,7 @@
 import {mkdir,readFile,writeFile,copyFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {createHash} from 'node:crypto';
 
 export const categories = [
   {id:'assets',folder:'11k3GYzmwPI9u3A6AwcEzRibGExI86vaw'},
@@ -91,7 +92,16 @@ export async function build({root=resolve('.'),offline=false,drive}={}){
   // Collect everything before writing output: failed reads never become an empty published catalogue.
   const result=offline?{catalog:JSON.parse(await readFile(join(root,'data/catalog.json'),'utf8')),banners:[],scanned:0}:await collect(drive||createDrive(process.env.GOOGLE_DRIVE_API_KEY));
   const out=join(root,'dist');await mkdir(join(out,'assets/banners'),{recursive:true});await mkdir(join(out,'data'),{recursive:true});
-  for(const file of ['index.html','styles.css','app.js','CNAME','assets/logo.png'])await copyFile(join(root,file),join(out,file));
+  for(const file of ['CNAME','assets/logo.png'])await copyFile(join(root,file),join(out,file));
+  let html=await readFile(join(root,'index.html'),'utf8');
+  for(const file of ['app.js','styles.css']){
+    const bytes=await readFile(join(root,file));
+    const hash=createHash('sha256').update(bytes).digest('hex').slice(0,12);
+    const versioned=file.replace(/\.(js|css)$/,'.'+hash+'.$1');
+    await writeFile(join(out,versioned),bytes);
+    html=html.replace('"'+file+'"','"'+versioned+'"');
+  }
+  await writeFile(join(out,'index.html'),html);
   for(const banner of result.banners)await writeFile(join(out,banner.image),banner.bytes);
   await writeFile(join(out,'data/catalog.json'),JSON.stringify(result.catalog,null,2)+'\n');
   await writeFile(join(out,'.nojekyll'),'');
