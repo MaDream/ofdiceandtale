@@ -24,6 +24,7 @@ main{width:100%;flex:1;outline:none}
 .rail:has(.empty){padding-inline:3px}
 .rail::-webkit-scrollbar{display:none}
 .card{position:relative;flex:0 0 calc(var(--banner-h)*2);width:calc(var(--banner-h)*2);height:var(--banner-h);background:#111216;border:1px solid #98794b;padding:5px;box-shadow:inset 0 0 0 2px #17191e,0 3px 8px #0004;scroll-snap-align:center;transform:scale(.82);opacity:.42;transition:transform .35s ease,opacity .35s ease,filter .22s,box-shadow .22s,border-color .22s}
+.rail.is-resetting .card{transition:none}
 .card.is-before{transform:perspective(700px) rotateY(24deg) scale(.82)}
 .card.is-after{transform:perspective(700px) rotateY(-24deg) scale(.82)}
 .card.is-active{transform:scale(1);opacity:1;z-index:2}

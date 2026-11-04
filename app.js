@@ -53,23 +53,47 @@ function render(){
   main.replaceChildren();
   if(failed){const warning=element('p','error',text('error'));const retry=element('button','',text('retry'));retry.onclick=loadCatalogue;warning.append(retry);main.append(warning);}
   categories.forEach(([id,folder],index)=>{
-    const category=catalogue.categories.find(x=>x.id===id),items=category?.items||[],url='https://drive.google.com/drive/folders/'+folder;
+    const category=catalogue.categories.find(x=>x.id===id),items=[...(category?.items||[])].sort((a,b)=>(a.title?.[language]||a.name).replace(/\[[^\]]*\]/g,'').trim().localeCompare((b.title?.[language]||b.name).replace(/\[[^\]]*\]/g,'').trim(),language,{sensitivity:'base',numeric:true})),url='https://drive.google.com/drive/folders/'+folder;
     const section=element('section','shelf'),heading=element('div','shelf-heading'),h2=element('h2');
     const number=element('span','section-number',String(index+1).padStart(2,'0')),link=element('a','',text(id));link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.append(element('span','section-arrow','↗'));h2.append(number,link);heading.append(h2);
     const rail=element('div','rail');rail.id='rail-'+id;
     if(!items.length){const empty=element('div','empty');empty.append(element('span','empty-symbol','✧'));const copy=element('p','',text('empty'));const small=element('small'),folderLink=element('a','',text('folder')+' ↗');folderLink.href=url;folderLink.target='_blank';folderLink.rel='noopener noreferrer';small.append(folderLink);copy.append(small);empty.append(copy);rail.append(empty);}
-    let active=0,previewTimer,lastPointerX,lastPointerY;
+    const count=items.length,base=count>1?count*2:0;
+    const slides=count>1?Array.from({length:count*5},(_,i)=>items[i%count]):items;
+    let active=base,previewTimer,lastPointerX,lastPointerY,resetting=false;
     const cards=[];
     function activate(index,show=false,animate=true){
       active=index;clearTimeout(previewTimer);closePreview();
-      cards.forEach((card,i)=>{card.classList.toggle('is-active',i===active);card.classList.toggle('is-before',i<active);card.classList.toggle('is-after',i>active);});
+      markCards();
       const card=cards[active];if(!card)return;
       rail.scrollTo({left:card.offsetLeft-(rail.clientWidth-card.offsetWidth)/2,behavior:!animate||matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
       if(show)previewTimer=setTimeout(()=>{
-        if(card.matches(':hover')||document.activeElement===card)showPreview(card,items[active],id);
+        const centered=cards[active];
+        if(centered.matches(':hover')||document.activeElement===centered)showPreview(centered,items[active%count],id);
       },450);
     }
-    items.forEach((item,index)=>{
+    function markCards(){
+      cards.forEach((card,i)=>{
+        card.classList.toggle('is-active',i===active);card.classList.toggle('is-before',i<active);card.classList.toggle('is-after',i>active);
+        card.tabIndex=i>=base&&i<base+count?0:-1;
+        card.setAttribute('aria-hidden',String(card.tabIndex<0&&i!==active));
+      });
+    }
+    function recenter(){
+      if(count<2)return;
+      const middle=base+((active%count)+count)%count;
+      if(middle===active)return;
+      const focused=document.activeElement===cards[active];
+      resetting=true;rail.classList.add('is-resetting');
+      active=middle;markCards();
+      const card=cards[active];
+      rail.scrollTo({left:card.offsetLeft-(rail.clientWidth-card.offsetWidth)/2,behavior:'instant'});
+      if(focused)card.focus({preventScroll:true});
+      // Both copies occupy identical pixels; move the scroll origin without animating.
+      void rail.offsetWidth;
+      rail.classList.remove('is-resetting');resetting=false;
+    }
+    slides.forEach((item,index)=>{
       const card=element('a','card'),image=element('img'),title=item.title?.[language]||item.title?.ru||item.name;
       card.href=driveUrl(item.url,url);card.target='_blank';card.rel='noopener noreferrer';card.setAttribute('aria-label',title+' — '+text('open'));
       image.src=item.image;image.alt='';image.width=320;image.height=160;image.loading='lazy';image.decoding='async';
@@ -81,21 +105,21 @@ function render(){
         else if(preview.hidden){clearTimeout(previewTimer);previewTimer=setTimeout(()=>showPreview(card,item,id),450);}
       });
       card.addEventListener('pointerleave',()=>{clearTimeout(previewTimer);laterClose();});
-      card.addEventListener('focus',()=>activate(index,true));card.addEventListener('blur',laterClose);
+      card.addEventListener('focus',()=>{if(!resetting)activate(index,true);});card.addEventListener('blur',laterClose);
       card.addEventListener('click',event=>{if(matchMedia('(hover: none)').matches){event.preventDefault();if(index!==active)activate(index);else showPreview(card,item,id,true);}});
       card.addEventListener('keydown',event=>{if(event.key==='ArrowLeft'||event.key==='ArrowRight'){
-        event.preventDefault();cards[Math.max(0,Math.min(cards.length-1,index+(event.key==='ArrowRight'?1:-1)))].focus({preventScroll:true});
+        event.preventDefault();if(count>1)cards[(index+(event.key==='ArrowRight'?1:-1)+cards.length)%cards.length].focus({preventScroll:true});
       }});
       cards.push(card);rail.append(card);
     });
-    rail.addEventListener('scroll',closePreview,{passive:true});
+    rail.addEventListener('scroll',()=>{if(!resetting)closePreview();},{passive:true});
     rail.addEventListener('scrollend',()=>{
-      if(!cards.length)return;
+      if(!cards.length||resetting)return;
       const center=rail.getBoundingClientRect().left+rail.clientWidth/2;
       active=cards.reduce((best,card,i)=>Math.abs(card.getBoundingClientRect().left+card.getBoundingClientRect().width/2-center)<Math.abs(cards[best].getBoundingClientRect().left+cards[best].getBoundingClientRect().width/2-center)?i:best,0);
-      cards.forEach((card,i)=>{card.classList.toggle('is-active',i===active);card.classList.toggle('is-before',i<active);card.classList.toggle('is-after',i>active);});
+      markCards();recenter();
     });
-    requestAnimationFrame(()=>activate(Math.floor((cards.length-1)/2),false,false));
+    requestAnimationFrame(()=>activate(base,false,false));
     section.append(heading,rail);main.append(section);
   });
   const updated=document.querySelector('#updated');
