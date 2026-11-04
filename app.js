@@ -13,12 +13,15 @@ let savedLanguage; try {savedLanguage=localStorage.getItem('odt-language');} cat
 let language = ['ru','en'].includes(savedLanguage) ? savedLanguage : ((navigator.languages || [navigator.language]).some(x=>/^ru(?:-|$)/i.test(x))?'ru':'en');
 let catalogue = {updatedAt:null,categories:[]}, failed=false;
 const main=document.querySelector('main'), preview=document.querySelector('#preview');
-let currentCard=null, hideTimer;
+let currentCard=null,hideTimer,previewPinned=false,inputMode='keyboard',restoringFocus=false;
+document.addEventListener('pointerdown',event=>{inputMode=event.pointerType||'mouse';});
+document.addEventListener('keydown',()=>{inputMode='keyboard';});
+function restoreCardFocus(card){restoringFocus=true;card?.focus({preventScroll:true});restoringFocus=false;}
 const text = key => strings[language][key];
 function element(tag,className,content){const node=document.createElement(tag);if(className)node.className=className;if(content!==undefined)node.textContent=content;return node;}
 function driveUrl(value,fallback){try{const url=new URL(value);if(url.protocol==='https:'&&url.hostname==='drive.google.com')return url.href;}catch{}return fallback;}
-function closePreview(){clearTimeout(hideTimer);preview.hidden=true;currentCard=null;}
-function laterClose(){hideTimer=setTimeout(()=>{if(!preview.contains(document.activeElement)&&document.activeElement!==currentCard)closePreview();},170);}
+function closePreview(){clearTimeout(hideTimer);preview.hidden=true;currentCard=null;previewPinned=false;}
+function laterClose(){if(previewPinned)return;hideTimer=setTimeout(()=>{if(!preview.contains(document.activeElement)&&document.activeElement!==currentCard)closePreview();},170);}
 function placePreview(card){
   const rect=card.getBoundingClientRect(),box=preview.getBoundingClientRect();
   preview.style.left=Math.max(12,Math.min(innerWidth-box.width-12,rect.left+(rect.width-box.width)/2))+'px';
@@ -26,7 +29,7 @@ function placePreview(card){
 }
 function showPreview(card,item,category,touch=false){
   if(!card.isConnected)return;
-  clearTimeout(hideTimer);currentCard=card;
+  clearTimeout(hideTimer);currentCard=card;previewPinned=touch;
   preview.querySelector('img').src=item.image;
   const imageLink=preview.querySelector('.preview-image-link');imageLink.href=card.href;imageLink.setAttribute('aria-label',text('open'));
   preview.querySelector('h2').textContent=item.title?.[language]||item.title?.ru||item.name;
@@ -42,10 +45,11 @@ function showPreview(card,item,category,touch=false){
   preview.style.visibility='';if(touch)preview.querySelector('.preview-close').focus({preventScroll:true});
 }
 preview.addEventListener('pointerenter',()=>clearTimeout(hideTimer));preview.addEventListener('pointerleave',laterClose);
-preview.addEventListener('focusout',laterClose);preview.querySelector('.preview-close').addEventListener('click',()=>{const card=currentCard;closePreview();card?.focus({preventScroll:true});closePreview();});
-document.addEventListener('keydown',event=>{if(event.key==='Escape'){const card=currentCard;closePreview();card?.focus({preventScroll:true});closePreview();}});
-document.addEventListener('pointerdown',event=>{if(!preview.contains(event.target)&&!event.target.closest('.card'))closePreview();});
-window.addEventListener('resize',closePreview);window.addEventListener('scroll',()=>{if(currentCard&&document.activeElement===currentCard)placePreview(currentCard);else closePreview();});
+preview.addEventListener('focusout',laterClose);preview.querySelector('.preview-close').addEventListener('click',()=>{const card=currentCard;closePreview();restoreCardFocus(card);closePreview();});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'){const card=currentCard;closePreview();restoreCardFocus(card);closePreview();}});
+document.addEventListener('pointerdown',event=>{if(!preview.contains(event.target))closePreview();});
+function updatePreviewPosition(){if(currentCard&&(previewPinned||document.activeElement===currentCard))placePreview(currentCard);else closePreview();}
+window.addEventListener('resize',updatePreviewPosition);window.addEventListener('scroll',updatePreviewPosition);
 function render(){
   closePreview();document.documentElement.lang=language;
   document.querySelectorAll('[data-i18n]').forEach(node=>node.textContent=text(node.dataset.i18n));
@@ -60,10 +64,10 @@ function render(){
     if(!items.length){const empty=element('div','empty');empty.append(element('span','empty-symbol','✧'));const copy=element('p','',text('empty'));const small=element('small'),folderLink=element('a','',text('folder')+' ↗');folderLink.href=url;folderLink.target='_blank';folderLink.rel='noopener noreferrer';small.append(folderLink);copy.append(small);empty.append(copy);rail.append(empty);}
     const count=items.length,base=count>1?count*2:0;
     const slides=count>1?Array.from({length:count*5},(_,i)=>items[i%count]):items;
-    let active=base,previewTimer,lastPointerX,lastPointerY,resetting=false;
+    let active=base,previewTimer,hoverTimer,lastPointerX,lastPointerY,hoverLockedUntil=0,touchPreviewPending=false,resetting=false;
     const cards=[];
     function activate(index,show=false,animate=true){
-      active=index;clearTimeout(previewTimer);closePreview();
+      active=index;clearTimeout(previewTimer);clearTimeout(hoverTimer);touchPreviewPending=false;closePreview();hoverLockedUntil=performance.now()+550;
       markCards();
       const card=cards[active];if(!card)return;
       rail.scrollTo({left:card.offsetLeft-(rail.clientWidth-card.offsetWidth)/2,behavior:!animate||matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
@@ -98,26 +102,39 @@ function render(){
       card.href=driveUrl(item.url,url);card.target='_blank';card.rel='noopener noreferrer';card.setAttribute('aria-label',title+' — '+text('open'));
       image.src=item.image;image.alt='';image.width=320;image.height=160;image.loading='lazy';image.decoding='async';
       card.append(image,element('span','card-title',title));
-      card.addEventListener('pointermove',event=>{
-        if(event.pointerType==='touch'||(event.clientX===lastPointerX&&event.clientY===lastPointerY))return;
-        lastPointerX=event.clientX;lastPointerY=event.clientY;
-        if(index!==active)activate(index,true);
-        else if(preview.hidden){clearTimeout(previewTimer);previewTimer=setTimeout(()=>showPreview(card,item,id),450);}
+      card.addEventListener('pointerenter',event=>{
+        if(event.pointerType==='mouse'&&index===active&&preview.hidden){clearTimeout(previewTimer);previewTimer=setTimeout(()=>{if(card.matches(':hover'))showPreview(card,item,id);},450);}
       });
-      card.addEventListener('pointerleave',()=>{clearTimeout(previewTimer);laterClose();});
-      card.addEventListener('focus',()=>{if(!resetting)activate(index,true);});card.addEventListener('blur',laterClose);
-      card.addEventListener('click',event=>{if(matchMedia('(hover: none)').matches){event.preventDefault();if(index!==active)activate(index);else showPreview(card,item,id,true);}});
+      card.addEventListener('pointermove',event=>{
+        if(event.pointerType!=='mouse'||event.buttons)return;
+        if(performance.now()<hoverLockedUntil){lastPointerX=event.clientX;lastPointerY=event.clientY;return;}
+        if(lastPointerX!==undefined&&Math.hypot(event.clientX-lastPointerX,event.clientY-lastPointerY)<18)return;
+        lastPointerX=event.clientX;lastPointerY=event.clientY;clearTimeout(hoverTimer);
+        if(index!==active){
+          hoverTimer=setTimeout(()=>{if(card.matches(':hover'))activate(index,true);},220);
+        }else if(preview.hidden){clearTimeout(previewTimer);previewTimer=setTimeout(()=>{if(card.matches(':hover'))showPreview(card,item,id);},450);}
+      });
+      card.addEventListener('pointerleave',()=>{clearTimeout(hoverTimer);clearTimeout(previewTimer);laterClose();});
+      card.addEventListener('focus',()=>{if(!resetting&&!restoringFocus&&inputMode==='keyboard')activate(index,true);});card.addEventListener('blur',laterClose);
+      card.addEventListener('click',event=>{
+        if(inputMode==='touch'||inputMode==='pen'||matchMedia('(hover: none)').matches){
+          event.preventDefault();activate(index);touchPreviewPending=true;
+          const target=card.offsetLeft-(rail.clientWidth-card.offsetWidth)/2;
+          if(Math.abs(rail.scrollLeft-target)<1){touchPreviewPending=false;showPreview(card,item,id,true);}
+        }
+      });
       card.addEventListener('keydown',event=>{if(event.key==='ArrowLeft'||event.key==='ArrowRight'){
         event.preventDefault();if(count>1)cards[(index+(event.key==='ArrowRight'?1:-1)+cards.length)%cards.length].focus({preventScroll:true});
       }});
       cards.push(card);rail.append(card);
     });
-    rail.addEventListener('scroll',()=>{if(!resetting)closePreview();},{passive:true});
+    rail.addEventListener('scroll',()=>{clearTimeout(hoverTimer);if(previewPinned&&currentCard)placePreview(currentCard);else if(!resetting)closePreview();},{passive:true});
     rail.addEventListener('scrollend',()=>{
       if(!cards.length||resetting)return;
       const center=rail.getBoundingClientRect().left+rail.clientWidth/2;
       active=cards.reduce((best,card,i)=>Math.abs(card.getBoundingClientRect().left+card.getBoundingClientRect().width/2-center)<Math.abs(cards[best].getBoundingClientRect().left+cards[best].getBoundingClientRect().width/2-center)?i:best,0);
       markCards();recenter();
+      if(touchPreviewPending){touchPreviewPending=false;showPreview(cards[active],items[active%count],id,true);}
     });
     requestAnimationFrame(()=>activate(base,false,false));
     section.append(heading,rail);main.append(section);
