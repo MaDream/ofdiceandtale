@@ -28,6 +28,7 @@ function placePreview(card){
 function showPreview(card,item,category,touch=false){
   clearTimeout(hideTimer);currentCard=card;
   preview.querySelector('img').src=item.image;
+  const imageLink=preview.querySelector('.preview-image-link');imageLink.href=card.href;imageLink.setAttribute('aria-label',text('open'));
   preview.querySelector('h2').textContent=item.title?.[language]||item.title?.ru||item.name;
   preview.querySelector('.preview-category').textContent=text(category);
   const description=preview.querySelector('.preview-description');description.replaceChildren();description.scrollTop=0;
