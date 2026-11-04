@@ -3,32 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#171923">
+  <meta name="theme-color" content="#17191e">
+  <meta name="description" content="Of Dice and Tale — ассеты, системы, модули и компендиумы для ваших историй за игровым столом.">
   <title>Of Dice and Tale</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
-      min-height: 100svh;
-      display: grid;
-      place-items: center;
-      padding: 32px 24px;
-      color: #f2e9dc;
-      background: radial-gradient(ellipse at 50% 20%, #303042, #171923 75%);
-      font-family: Georgia, "Times New Roman", serif;
-    }
-    main { width: min(100%, 760px); text-align: center; }
-    .mark { color: #d4b785; font-size: 56px; line-height: 1; }
-    h1 { margin: 28px 0; font-size: clamp(30px, 7vw, 56px); font-weight: 400; }
-    p { margin: 0 auto; max-width: 580px; font-size: clamp(18px, 3vw, 24px); line-height: 1.7; color: #d4cbbc; }
-  </style>
+  <link rel="icon" type="image/png" href="assets/logo.png">
+  <link rel="stylesheet" href="styles.css">
+  <script src="app.js" defer></script>
 </head>
 <body>
-  <main>
-    <div class="mark" aria-hidden="true">⚄</div>
-    <h1>Of Dice and Tale</h1>
-    <p>Когда-нибудь возможно здесь будет сайт, посвещенный НРИ, но не сегодня..</p>
-  </main>
+  <a class="skip" href="#catalog">К каталогу / Skip to catalogue</a>
+  <header class="masthead">
+    <a class="brand" href="./" aria-label="Of Dice and Tale">
+      <img src="assets/logo.png" width="84" height="84" alt="">
+      <div><span class="eyebrow" data-i18n="eyebrow">МАЛЕНЬКАЯ БИБЛИОТЕКА БОЛЬШИХ ИСТОРИЙ</span><h1>Of Dice <i>&</i> Tale</h1></div>
+    </a>
+    <div class="header-tools">
+      <a class="foundry-link" href="https://foundry.ofdiceandtale.ru" target="_blank" rel="noopener noreferrer">Foundry VTT <span aria-hidden="true">↗</span></a>
+      <div class="languages" role="group" aria-label="Язык / Language"><button type="button" data-lang="ru">RU</button><span aria-hidden="true">/</span><button type="button" data-lang="en">EN</button></div>
+    </div>
+  </header>
+  <main id="catalog" tabindex="-1" aria-busy="true"><p class="loading" role="status" data-i18n="loading">Открываем библиотеку…</p></main>
+  <footer><span data-i18n="footer">Для миров, которые ещё предстоит придумать.</span><span id="updated" aria-live="polite"></span></footer>
+  <aside id="preview" class="preview" hidden aria-label="Описание / Description">
+    <button class="preview-close" type="button" aria-label="Закрыть / Close">×</button>
+    <img class="preview-image" alt="">
+    <div class="preview-copy"><span class="preview-category eyebrow"></span><h2></h2><div class="preview-description"></div><a class="preview-link" target="_blank" rel="noopener noreferrer"></a></div>
+  </aside>
+  <noscript><p class="noscript">Для каталога включите JavaScript. / Enable JavaScript to view the catalogue.</p></noscript>
 </body>
 </html>

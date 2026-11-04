@@ -1,0 +1,62 @@
+name: Sync Drive and publish Pages
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: [README.md]
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      bootstrap:
+        description: 'Publish the initial empty site without Drive (first deployment only)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Check sync logic
+        run: node --test
+      - name: Sync public Drive catalogue
+        if: ${{ !inputs.bootstrap }}
+        env:
+          GOOGLE_DRIVE_API_KEY: ${{ secrets.GOOGLE_DRIVE_API_KEY }}
+        run: node scripts/sync.mjs
+      - name: Build initial empty catalogue
+        if: ${{ inputs.bootstrap }}
+        run: node scripts/sync.mjs --offline
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist
+      - name: Publish site
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Record successful sync in README
+        if: ${{ !inputs.bootstrap }}
+        run: |
+          node scripts/record-sync.mjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add README.md
+          git commit -m 'Update successful Drive sync timestamp'
+          git push origin HEAD:main

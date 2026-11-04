@@ -1,0 +1,5 @@
+dist/
+.preview/
+.env
+.env.*
+node_modules/
