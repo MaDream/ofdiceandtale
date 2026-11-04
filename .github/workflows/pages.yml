@@ -54,6 +54,8 @@ jobs:
       - name: Record successful sync in README
         if: ${{ !inputs.bootstrap }}
         run: |
+          git fetch origin main
+          git checkout --detach origin/main
           node scripts/record-sync.mjs
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
