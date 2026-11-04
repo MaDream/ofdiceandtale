@@ -44,15 +44,24 @@ export function createDrive(key,fetcher=fetch){
   };
 }
 export function selectPair(files,folderName){
-  const candidates=files.filter(file=>/\.md$/i.test(file.name)&&! /\.(?:en|ru)\.md$/i.test(file.name));
-  const pairs=candidates.map(md=>({md,stem:md.name.slice(0,-3),png:files.filter(file=>file.name===md.name.slice(0,-3)+'.png')})).filter(pair=>pair.png.length);
+  const stems=new Set(files.filter(file=>/\.png$/i.test(file.name)).map(file=>file.name.replace(/(?:_banner)?\.png$/i,'')));
+  const pairs=[];
+  for(const stem of stems){
+    const findOne=suffixes=>{
+      for(const suffix of suffixes){
+        const matches=files.filter(file=>file.name===stem+suffix);
+        if(matches.length>1)throw Error('Ambiguous duplicate metadata file in a project folder.');
+        if(matches.length)return matches[0];
+      }
+    };
+    const md=findOne(['_ru.md','.ru.md','.md']);
+    if(md)pairs.push({stem,md,png:findOne(['_banner.png','.png']),en:findOne(['_en.md','.en.md'])});
+  }
   const named=pairs.filter(pair=>pair.stem===folderName);
   const selected=named.length?named:pairs;
   if(!selected.length)return null;
-  if(selected.length!==1||selected[0].png.length!==1)throw Error('Ambiguous description/banner pair in a project folder. Keep one matching pair per project.');
-  const pair=selected[0],english=files.filter(file=>file.name===pair.stem+'.en.md');
-  if(english.length>1)throw Error('Duplicate English description in a project folder.');
-  return {md:pair.md,png:pair.png[0],en:english[0]};
+  if(selected.length!==1)throw Error('Ambiguous description/banner pair in a project folder. Keep one matching pair per project.');
+  return selected[0];
 }
 export function parseDescription(bytes,fallback){
   const value=new TextDecoder('utf-8',{fatal:true}).decode(bytes).replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').trim();
@@ -63,10 +72,17 @@ function safeDriveLink(value,id){try{const url=new URL(value);if(url.protocol===
 export async function collect(drive,groups=categories){
   const catalog={updatedAt:null,categories:[]},banners=[];let scanned=0;
   for(const group of groups){
-    const children=await drive.list(group.folder),items=[];
-    for(const project of children.filter(file=>file.mimeType===folderType).sort((a,b)=>a.name.localeCompare(b.name,'ru'))){
+    const children=await drive.list(group.folder),items=[],visited=new Set([group.folder]);
+    async function visit(project){
+      if(visited.has(project.id))return;
+      visited.add(project.id);
       scanned++;if(!/^[\w-]+$/.test(project.id))throw Error('Invalid project ID.');
-      const files=await drive.list(project.id),pair=selectPair(files,project.name);if(!pair)continue;
+      const files=await drive.list(project.id),pair=selectPair(files,project.name);
+      if(!pair){
+        for(const child of files.filter(file=>file.mimeType===folderType))await visit(child);
+        return;
+      }
+      // A complete metadata pair marks a project. Its NPCs, locations and other contents are not separate cards.
       const ru=parseDescription(await drive.download(pair.md,256*1024),project.name);
       const en=pair.en?parseDescription(await drive.download(pair.en,256*1024),project.name):null;
       const png=await drive.download(pair.png,8*1024*1024);
@@ -75,6 +91,9 @@ export async function collect(drive,groups=categories){
       const image='assets/banners/'+project.id+'.png';banners.push({image,bytes:png});
       items.push({id:project.id,name:project.name,title:{ru:ru.title,...(en?{en:en.title}:{})},description:{ru:ru.description,...(en?{en:en.description}:{})},image,url:safeDriveLink(project.webViewLink,project.id)});
     }
+    for(const project of children.filter(file=>file.mimeType===folderType))await visit(project);
+    items.sort((a,b)=>a.name.localeCompare(b.name,'ru'));
+    console.log(group.id+': '+items.length+' cards');
     catalog.categories.push({...group,url:'https://drive.google.com/drive/folders/'+group.folder,items});
   }
   catalog.updatedAt=new Date().toISOString();return {catalog,banners,scanned};

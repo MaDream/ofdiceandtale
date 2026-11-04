@@ -18,6 +18,25 @@ test('UTF-8 titles and text survive; HTML remains text for safe browser renderin
   assert.deepEqual(parseDescription(Buffer.from('\uFEFF# Мир\r\n\r\n<script>alert(1)</script>'),'Fallback'),{title:'Мир',description:'<script>alert(1)</script>'});
   assert.throws(()=>parseDescription(Buffer.from([0xff]),'Fallback'));
 });
+test('real underscore convention matches localized descriptions and a banner independently of folder tags',()=>{
+  const files=['Chicago By Night_banner.png','Chicago By Night_ru.md','Chicago By Night_en.md','DESCRIPTION.md','ОПИСАНИЕ.md'].map(name=>({name}));
+  const pair=selectPair(files,'[VTM] Chicago By Night');
+  assert.equal(pair.md.name,'Chicago By Night_ru.md');
+  assert.equal(pair.en.name,'Chicago By Night_en.md');
+  assert.equal(pair.png.name,'Chicago By Night_banner.png');
+  assert.equal(selectPair(files.filter(file=>file!==pair.md),'[VTM] Chicago By Night'),null);
+});
+test('nested category folders are traversed, but a marked project stops traversal into its assets',async()=>{
+  const png=Buffer.alloc(24);Buffer.from([137,80,78,71,13,10,26,10]).copy(png);png.writeUInt32BE(320,16);png.writeUInt32BE(160,20);
+  const folder=(id,name)=>({id,name,mimeType:folderType});
+  const tree={root:[folder('setting','worldofdarkness')],setting:[folder('one','Sinful Creatures Hack v20'),folder('two','Angelic Names')],one:[{id:'ru1',name:'Sinful Creatures Hack v20_ru.md'},{id:'en1',name:'Sinful Creatures Hack v20_en.md'},{id:'png1',name:'Sinful Creatures Hack v20_banner.png'},folder('ignored','NPC')],two:[{id:'ru2',name:'Angelic Names_ru.md'},{id:'en2',name:'Angelic Names_en.md'},{id:'png2',name:'Angelic Names_banner.png'}]};
+  const visited=[];
+  const drive={list:async id=>{visited.push(id);assert.ok(tree[id],'must not descend into marked project contents');return tree[id];},download:async file=>file.id.startsWith('png')?png:Buffer.from(file.id.startsWith('en')?'English description':'Русское описание')};
+  const result=await collect(drive,[{id:'modules',folder:'root'}]);
+  assert.deepEqual(result.catalog.categories[0].items.map(x=>x.name),['Angelic Names','Sinful Creatures Hack v20']);
+  assert.deepEqual(visited,['root','setting','one','two']);
+  assert.equal(result.catalog.categories[0].items[0].description.en,'English description');
+});
 test('Drive listing follows pagination and keeps credentials out of request URLs',async()=>{
   const calls=[];
   const drive=createDrive('test-key',async(url,options)=>{
