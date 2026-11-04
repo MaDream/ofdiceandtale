@@ -44,24 +44,15 @@ export function createDrive(key,fetcher=fetch){
   };
 }
 export function selectPair(files,folderName){
-  const stems=new Set(files.filter(file=>/\.png$/i.test(file.name)).map(file=>file.name.replace(/(?:_banner)?\.png$/i,'')));
-  const pairs=[];
-  for(const stem of stems){
-    const findOne=suffixes=>{
-      for(const suffix of suffixes){
-        const matches=files.filter(file=>file.name===stem+suffix);
-        if(matches.length>1)throw Error('Ambiguous duplicate metadata file in a project folder.');
-        if(matches.length)return matches[0];
-      }
-    };
-    const md=findOne(['_ru.md','.ru.md','.md']);
-    if(md)pairs.push({stem,md,png:findOne(['_banner.png','.png']),en:findOne(['_en.md','.en.md'])});
-  }
-  const named=pairs.filter(pair=>pair.stem===folderName);
-  const selected=named.length?named:pairs;
-  if(!selected.length)return null;
-  if(selected.length!==1)throw Error('Ambiguous description/banner pair in a project folder. Keep one matching pair per project.');
-  return selected[0];
+  const stem=folderName.replace(/\[[^\]]*\]/g,'').trim().replace(/\s+/g,' ');
+  if(!stem)return null;
+  const findOne=suffix=>{
+    const matches=files.filter(file=>file.name===stem+suffix&&file.mimeType!==folderType);
+    if(matches.length>1)throw Error('Ambiguous duplicate metadata file in project '+folderName+'.');
+    return matches[0];
+  };
+  const md=findOne('_ru.md'),en=findOne('_en.md'),png=findOne('_banner.png');
+  return md&&en&&png?{stem,md,en,png}:null;
 }
 export function parseDescription(bytes,fallback){
   const value=new TextDecoder('utf-8',{fatal:true}).decode(bytes).replace(/^\uFEFF/,'').replace(/\r\n/g,'\n').trim();
@@ -78,18 +69,16 @@ export async function collect(drive,groups=categories){
       visited.add(project.id);
       scanned++;if(!/^[\w-]+$/.test(project.id))throw Error('Invalid project ID.');
       const files=await drive.list(project.id),pair=selectPair(files,project.name);
-      if(!pair){
-        for(const child of files.filter(file=>file.mimeType===folderType))await visit(child);
-        return;
+      if(pair){
+        const ru=parseDescription(await drive.download(pair.md,256*1024),pair.stem);
+        const en=parseDescription(await drive.download(pair.en,256*1024),pair.stem);
+        const png=await drive.download(pair.png,8*1024*1024);
+        if(png.length<24||!png.subarray(0,8).equals(pngSignature))throw Error('A banner with .png extension is not a valid PNG.');
+        if(png.readUInt32BE(16)!==320||png.readUInt32BE(20)!==160)console.warn('A banner is not 320×160; it will be displayed with a 2:1 crop.');
+        const image='assets/banners/'+project.id+'.png';banners.push({image,bytes:png});
+        items.push({id:project.id,name:project.name,title:{ru:ru.title,en:en.title},description:{ru:ru.description,en:en.description},image,url:safeDriveLink(project.webViewLink,project.id)});
       }
-      // A complete metadata pair marks a project. Its NPCs, locations and other contents are not separate cards.
-      const ru=parseDescription(await drive.download(pair.md,256*1024),project.name);
-      const en=pair.en?parseDescription(await drive.download(pair.en,256*1024),project.name):null;
-      const png=await drive.download(pair.png,8*1024*1024);
-      if(png.length<24||!png.subarray(0,8).equals(pngSignature))throw Error('A banner with .png extension is not a valid PNG.');
-      if(png.readUInt32BE(16)!==320||png.readUInt32BE(20)!==160)console.warn('A banner is not 320×160; it will be displayed with a 2:1 crop.');
-      const image='assets/banners/'+project.id+'.png';banners.push({image,bytes:png});
-      items.push({id:project.id,name:project.name,title:{ru:ru.title,...(en?{en:en.title}:{})},description:{ru:ru.description,...(en?{en:en.description}:{})},image,url:safeDriveLink(project.webViewLink,project.id)});
+      for(const child of files.filter(file=>file.mimeType===folderType))await visit(child);
     }
     for(const project of children.filter(file=>file.mimeType===folderType))await visit(project);
     items.sort((a,b)=>a.name.localeCompare(b.name,'ru'));

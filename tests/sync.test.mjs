@@ -6,13 +6,14 @@ import {join} from 'node:path';
 import {selectPair,parseDescription,createDrive,collect,build} from '../scripts/sync.mjs';
 
 const folderType='application/vnd.google-apps.folder';
-test('pairs require both files; English is supplementary; ambiguous and duplicate files fail',()=>{
-  assert.equal(selectPair([{name:'Alpha.md'}],'Alpha'),null);
-  assert.equal(selectPair([{name:'Alpha.en.md'},{name:'Alpha.png'}],'Alpha'),null);
-  const files=[{name:'Alpha.md'},{name:'Alpha.png'},{name:'Alpha.en.md'}];
-  assert.equal(selectPair(files,'Renamed folder').en.name,'Alpha.en.md');
-  assert.throws(()=>selectPair([...files,{name:'Beta.md'},{name:'Beta.png'}],'Other'),/Ambiguous/);
-  assert.throws(()=>selectPair([...files,{name:'Alpha.png'}],'Alpha'),/Ambiguous/);
+test('all three exact folder-based filenames are required; legacy names and unrelated stems do not qualify',()=>{
+  const files=['Alpha_ru.md','Alpha_en.md','Alpha_banner.png'].map(name=>({name}));
+  assert.equal(selectPair(files,'Alpha').en.name,'Alpha_en.md');
+  for(const omitted of files)assert.equal(selectPair(files.filter(file=>file!==omitted),'Alpha'),null);
+  assert.equal(selectPair(files,'Other'),null);
+  assert.equal(selectPair(['Alpha.md','Alpha.png','Alpha.en.md'].map(name=>({name})),'Alpha'),null);
+  assert.equal(selectPair([{name:'Alpha_ru.md',mimeType:folderType},...files.slice(1)],'Alpha'),null);
+  assert.throws(()=>selectPair([...files,{name:'Alpha_banner.png'}],'Alpha'),/Ambiguous/);
 });
 test('UTF-8 titles and text survive; HTML remains text for safe browser rendering',()=>{
   assert.deepEqual(parseDescription(Buffer.from('\uFEFF# Мир\r\n\r\n<script>alert(1)</script>'),'Fallback'),{title:'Мир',description:'<script>alert(1)</script>'});
@@ -26,15 +27,16 @@ test('real underscore convention matches localized descriptions and a banner ind
   assert.equal(pair.png.name,'Chicago By Night_banner.png');
   assert.equal(selectPair(files.filter(file=>file!==pair.md),'[VTM] Chicago By Night'),null);
 });
-test('nested category folders are traversed, but a marked project stops traversal into its assets',async()=>{
+test('all nested folders are searched, including children of already matched projects',async()=>{
   const png=Buffer.alloc(24);Buffer.from([137,80,78,71,13,10,26,10]).copy(png);png.writeUInt32BE(320,16);png.writeUInt32BE(160,20);
   const folder=(id,name)=>({id,name,mimeType:folderType});
-  const tree={root:[folder('setting','worldofdarkness')],setting:[folder('one','Sinful Creatures Hack v20'),folder('two','Angelic Names')],one:[{id:'ru1',name:'Sinful Creatures Hack v20_ru.md'},{id:'en1',name:'Sinful Creatures Hack v20_en.md'},{id:'png1',name:'Sinful Creatures Hack v20_banner.png'},folder('ignored','NPC')],two:[{id:'ru2',name:'Angelic Names_ru.md'},{id:'en2',name:'Angelic Names_en.md'},{id:'png2',name:'Angelic Names_banner.png'}]};
+  const tree={root:[folder('setting','worldofdarkness')],setting:[folder('one','Sinful Creatures Hack v20'),folder('two','Angelic Names')],one:[{id:'ru1',name:'Sinful Creatures Hack v20_ru.md'},{id:'en1',name:'Sinful Creatures Hack v20_en.md'},{id:'png1',name:'Sinful Creatures Hack v20_banner.png'},folder('nested','[NPC] Nested')],two:[{id:'ru2',name:'Angelic Names_ru.md'},{id:'en2',name:'Angelic Names_en.md'},{id:'png2',name:'Angelic Names_banner.png'}],nested:[{id:'ru3',name:'Nested_ru.md'},{id:'en3',name:'Nested_en.md'},{id:'png3',name:'Nested_banner.png'}]};
   const visited=[];
-  const drive={list:async id=>{visited.push(id);assert.ok(tree[id],'must not descend into marked project contents');return tree[id];},download:async file=>file.id.startsWith('png')?png:Buffer.from(file.id.startsWith('en')?'English description':'Русское описание')};
+  const drive={list:async id=>{visited.push(id);assert.ok(tree[id]);return tree[id];},download:async file=>file.id.startsWith('png')?png:Buffer.from(file.id.startsWith('en')?'English description':'Русское описание')};
   const result=await collect(drive,[{id:'modules',folder:'root'}]);
-  assert.deepEqual(result.catalog.categories[0].items.map(x=>x.name),['Angelic Names','Sinful Creatures Hack v20']);
-  assert.deepEqual(visited,['root','setting','one','two']);
+  assert.deepEqual(result.catalog.categories[0].items.map(x=>x.name).sort(),['Angelic Names','Sinful Creatures Hack v20','[NPC] Nested'].sort());
+  assert.deepEqual(visited,['root','setting','one','nested','two']);
+  assert.equal(result.catalog.categories[0].items.find(x=>x.id==='nested').title.en,'Nested');
   assert.equal(result.catalog.categories[0].items[0].description.en,'English description');
 });
 test('Drive listing follows pagination and keeps credentials out of request URLs',async()=>{
@@ -58,7 +60,7 @@ test('catalogue skips incomplete projects, preserves folder links, and downloads
     {id:'project',name:'Alpha',mimeType:folderType,webViewLink:'https://drive.google.com/drive/folders/project?resourcekey=abc'},
     {id:'incomplete',name:'Beta',mimeType:folderType},
     {id:'archive',name:'files.zip',mimeType:'application/zip'}
-  ]:id==='project'?[{id:'md',name:'Alpha.md'},{id:'en',name:'Alpha.en.md'},{id:'png',name:'Alpha.png'},{id:'zip',name:'Alpha.zip'}]:[{id:'partial',name:'Beta.md'}],download:async file=>{calls.push(file.id);return file.id==='png'?png:Buffer.from(file.id==='en'?'# English\n\nEnglish text':'# Русский\n\nРусский текст');}};
+  ]:id==='project'?[{id:'md',name:'Alpha_ru.md'},{id:'en',name:'Alpha_en.md'},{id:'png',name:'Alpha_banner.png'},{id:'zip',name:'Alpha.zip'}]:[{id:'partial',name:'Beta_ru.md'}],download:async file=>{calls.push(file.id);return file.id==='png'?png:Buffer.from(file.id==='en'?'# English\n\nEnglish text':'# Русский\n\nРусский текст');}};
   const result=await collect(drive,[{id:'systems',folder:'root'}]);
   assert.equal(result.catalog.categories[0].items.length,1);assert.equal(result.scanned,2);
   assert.equal(result.catalog.categories[0].items[0].title.en,'English');
