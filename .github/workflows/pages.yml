@@ -34,6 +34,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Install Markdown parser
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Check sync logic
         run: node --test
       - name: Sync public Drive catalogue

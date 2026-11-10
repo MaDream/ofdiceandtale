@@ -25,9 +25,10 @@ async function page(){
     scrollTo({left,behavior}){this.targetLeft=left;if(behavior==='instant')this.scrollLeft=left;}
     finishScroll(){this.scrollLeft=this.targetLeft;this.emit('scroll');this.emit('scrollend');}
   }
-  const doc=new Element(),main=new Element(),preview=new Element(),updated=new Element();
+  const doc=new Element(),main=new Element(),preview=new Element(),updated=new Element(),updatesDialog=new Element(),updatesButton=new Element(),updatesContent=new Element();
+  updatesDialog.parts={'.updates-close':new Element()};
   doc.documentElement={};doc.createElement=()=>new Element();doc.querySelectorAll=()=>[];
-  doc.querySelector=selector=>({'main':main,'#preview':preview,'#updated':updated}[selector]);
+  doc.querySelector=selector=>({'main':main,'#preview':preview,'#updated':updated,'#updates-dialog':updatesDialog,'.updates-button':updatesButton,'.updates-content':updatesContent}[selector]);
   preview.parts=Object.fromEntries(['img','.preview-image-link','h2','.preview-category','.preview-description','.preview-link','.preview-close'].map(key=>[key,new Element()]));
   preview.append(...Object.values(preview.parts));
   const context={document:doc,window:new Element(),navigator:{languages:['en']},localStorage:{getItem:()=>null},URL,Intl,Date,innerWidth:1440,innerHeight:900,performance:{now:()=>now},matchMedia:()=>({matches:false}),

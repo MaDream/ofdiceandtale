@@ -1,7 +1,7 @@
 'use strict';
 const strings = {
-  ru: {eyebrow:'Для авторов историй, которые еще предстоит рассказать.',loading:'Открываем библиотеку…',assets:'Ассеты',systems:'Системы',modules:'Модули',compendiums:'Компендиумы',empty:'Новая глава ещё впереди.',folder:'Заглянуть в папку',open:'Открыть в Google Drive ↗',updated:'Обновлено',pending:'Первые материалы скоро появятся',error:'Не удалось загрузить каталог.',retry:'Повторить',original:'Описание на русском',noDescription:'Описание скоро появится.'},
-  en: {eyebrow:'For authors of stories yet to be told.',loading:'Opening the library…',assets:'Assets',systems:'Systems',modules:'Modules',compendiums:'Compendiums',empty:'The next chapter is still to come.',folder:'Explore the folder',open:'Open in Google Drive ↗',updated:'Updated',pending:'The first materials are on their way',error:'The catalogue could not be loaded.',retry:'Try again',original:'Description in Russian',noDescription:'Description coming soon.'}
+  ru: {updates:'Обновления',updatesEmpty:'Обновлений пока нет.',updatesLoading:'Загружаем обновления…',updatesError:'Не удалось загрузить обновления.',eyebrow:'Для авторов историй, которые еще предстоит рассказать.',loading:'Открываем библиотеку…',assets:'Ассеты',systems:'Системы',modules:'Модули',compendiums:'Компендиумы',empty:'Новая глава ещё впереди.',folder:'Заглянуть в папку',open:'Открыть в Google Drive ↗',updated:'Обновлено',pending:'Первые материалы скоро появятся',error:'Не удалось загрузить каталог.',retry:'Повторить',original:'Описание на русском',noDescription:'Описание скоро появится.'},
+  en: {updates:'Updates',updatesEmpty:'No updates yet.',updatesLoading:'Loading updates…',updatesError:'Could not load updates.',eyebrow:'For authors of stories yet to be told.',loading:'Opening the library…',assets:'Assets',systems:'Systems',modules:'Modules',compendiums:'Compendiums',empty:'The next chapter is still to come.',folder:'Explore the folder',open:'Open in Google Drive ↗',updated:'Updated',pending:'The first materials are on their way',error:'The catalogue could not be loaded.',retry:'Try again',original:'Description in Russian',noDescription:'Description coming soon.'}
 };
 const categories = [
   ['assets','11k3GYzmwPI9u3A6AwcEzRibGExI86vaw'],
@@ -13,6 +13,8 @@ let savedLanguage; try {savedLanguage=localStorage.getItem('odt-language');} cat
 let language = ['ru','en'].includes(savedLanguage) ? savedLanguage : ((navigator.languages || [navigator.language]).some(x=>/^ru(?:-|$)/i.test(x))?'ru':'en');
 let catalogue = {updatedAt:null,categories:[]}, failed=false;
 const main=document.querySelector('main'), preview=document.querySelector('#preview');
+const updatesDialog=document.querySelector('#updates-dialog'),updatesButton=document.querySelector('.updates-button'),updatesContent=document.querySelector('.updates-content');
+let updatesData=null,updatesFailed=false;
 let currentCard=null,hideTimer,previewPinned=false,inputMode='keyboard',restoringFocus=false;
 document.addEventListener('pointerdown',event=>{inputMode=event.pointerType||'mouse';});
 document.addEventListener('keydown',()=>{inputMode='keyboard';});
@@ -50,8 +52,42 @@ document.addEventListener('keydown',event=>{if(event.key==='Escape'){const card=
 document.addEventListener('pointerdown',event=>{if(!preview.contains(event.target))closePreview();});
 function updatePreviewPosition(){if(currentCard&&(previewPinned||document.activeElement===currentCard))placePreview(currentCard);else closePreview();}
 window.addEventListener('resize',updatePreviewPosition);window.addEventListener('scroll',updatePreviewPosition);
+function renderUpdates(){
+  updatesContent.replaceChildren();
+  if(updatesFailed){
+    const message=element('p','updates-status',text('updatesError')),retry=element('button','updates-retry',text('retry'));
+    retry.addEventListener('click',loadUpdates);updatesContent.append(message,retry);return;
+  }
+  if(!updatesData){updatesContent.append(element('p','updates-status',text('updatesLoading')));return;}
+  const entries=updatesData[language];
+  if(!entries.length){updatesContent.append(element('p','updates-status',text('updatesEmpty')));return;}
+  const format=new Intl.DateTimeFormat(language==='ru'?'ru-RU':'en-GB',{day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
+  entries.forEach(entry=>{
+    const article=element('article','update-entry'),heading=element('h2','update-date'),date=element('time','',format.format(new Date(entry.date+'T00:00:00Z'))),body=element('div','update-body');
+    date.dateTime=entry.date;heading.append(date);
+    // Generated at build time by markdown-it with raw HTML disabled and unsafe links rejected.
+    body.innerHTML=entry.html;article.append(heading,body);updatesContent.append(article);
+  });
+}
+async function loadUpdates(){
+  updatesFailed=false;updatesContent.setAttribute('aria-busy','true');renderUpdates();
+  try{
+    const response=await fetch('data/updates.json',{cache:'no-cache'});if(!response.ok)throw Error('Unavailable');
+    const data=await response.json();
+    if(!['ru','en'].every(lang=>Array.isArray(data[lang])&&data[lang].every(entry=>typeof entry.date==='string'&&typeof entry.html==='string')))throw Error('Invalid updates');
+    updatesData=data;
+  }catch{updatesFailed=true;}
+  finally{updatesContent.setAttribute('aria-busy','false');renderUpdates();}
+}
+updatesButton.addEventListener('click',()=>{closePreview();updatesDialog.showModal();loadUpdates();});
+updatesDialog.querySelector('.updates-close').addEventListener('click',()=>updatesDialog.close());
+updatesDialog.addEventListener('click',event=>{
+  if(event.target!==updatesDialog)return;
+  const rect=updatesDialog.getBoundingClientRect();
+  if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)updatesDialog.close();
+});
 function render(){
-  closePreview();document.documentElement.lang=language;
+  closePreview();document.documentElement.lang=language;renderUpdates();
   document.querySelectorAll('[data-i18n]').forEach(node=>node.textContent=text(node.dataset.i18n));
   document.querySelectorAll('[data-lang]').forEach(node=>node.setAttribute('aria-pressed',String(node.dataset.lang===language)));
   main.replaceChildren();

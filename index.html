@@ -18,11 +18,20 @@
       <div><em class="tagline" data-i18n="eyebrow">Для авторов историй, которые еще предстоит рассказать.</em><h1>Of Dice <i>&</i> Tale</h1></div>
     </a>
     <div class="header-tools">
+      <button class="updates-button" type="button" aria-haspopup="dialog" aria-controls="updates-dialog" data-i18n="updates">Обновления</button>
       <div class="languages" role="group" aria-label="Язык / Language"><button type="button" data-lang="ru">RU</button><span aria-hidden="true">/</span><button type="button" data-lang="en">EN</button></div>
     </div>
   </header>
   <main id="catalog" tabindex="-1" aria-busy="true"><p class="loading" role="status" data-i18n="loading">Открываем библиотеку…</p></main>
   <footer><span id="updated" aria-live="polite"></span></footer>
+  <dialog id="updates-dialog" class="updates-panel" aria-labelledby="updates-title">
+    <header class="updates-top">
+      <h2 id="updates-title" data-i18n="updates">Обновления</h2>
+      <div class="languages" role="group" aria-label="Язык / Language"><button type="button" data-lang="ru">RU</button><span aria-hidden="true">/</span><button type="button" data-lang="en">EN</button></div>
+      <button class="updates-close" type="button" aria-label="Закрыть / Close" autofocus>×</button>
+    </header>
+    <div class="updates-content" aria-live="polite"></div>
+  </dialog>
   <aside id="preview" class="preview" hidden aria-label="Описание / Description">
     <button class="preview-close" type="button" aria-label="Закрыть / Close">×</button>
     <a class="preview-image-link" target="_blank" rel="noopener noreferrer"><img class="preview-image" alt=""></a>
