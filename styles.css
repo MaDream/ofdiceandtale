@@ -79,3 +79,13 @@ footer{display:flex;justify-content:flex-end;gap:16px;padding:16px 0 18px;color:
 @media(max-width:390px){.brand img{width:43px;height:43px}.brand{gap:9px}h1{font-size:25px}.tagline{max-width:175px;font-size:10px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 
+.contact-button{margin-right:auto;border:0;border-bottom:1px solid #b99b6255;background:transparent;padding:4px 0;color:var(--gold);font:12px/1.6 system-ui,sans-serif}
+.contact-button:hover{border-color:var(--gold)}
+.contact-panel{width:min(360px,calc(100vw - 40px));padding:22px;border:1px solid #b99b6280;background:#1c1e23;color:var(--ink);box-shadow:0 20px 60px #0008}
+.contact-panel::backdrop{background:#08090b99;backdrop-filter:blur(2px)}
+.contact-panel:popover-open{animation:reveal .2s ease-out}
+.contact-panel header{display:flex;align-items:center;gap:12px;margin-bottom:15px}
+.contact-panel h2{flex:1;margin:0;font:24px/1.25 Georgia,serif}
+.contact-link{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 0;border-top:1px solid var(--line);font:15px/1.5 system-ui,sans-serif;color:var(--gold)}
+.contact-link small{display:block;font-size:12px;color:var(--muted)}
+.contact-link:hover{color:var(--ink)}

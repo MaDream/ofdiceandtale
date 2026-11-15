@@ -23,7 +23,12 @@
     </div>
   </header>
   <main id="catalog" tabindex="-1" aria-busy="true"><p class="loading" role="status" data-i18n="loading">Открываем библиотеку…</p></main>
-  <footer><span id="updated" aria-live="polite"></span></footer>
+  <footer><button class="contact-button" type="button" popovertarget="contact-panel" data-i18n="contact">Связь с автором</button><span id="updated" aria-live="polite"></span></footer>
+  <section id="contact-panel" class="contact-panel" popover aria-labelledby="contact-title">
+    <header><h2 id="contact-title" data-i18n="contact">Связь с автором</h2><button type="button" class="updates-close" popovertarget="contact-panel" popovertargetaction="hide" aria-label="Закрыть / Close">×</button></header>
+    <a class="contact-link" href="https://t.me/ofdiceandtale" target="_blank" rel="noopener noreferrer"><span>Telegram<small>@ofdiceandtale</small></span><span aria-hidden="true">↗</span></a>
+    <a class="contact-link" id="discord-contact" href="https://discord.com/users/96681481480466432" target="_blank" rel="noopener noreferrer"><span>Discord<small>_daydream</small></span><span aria-hidden="true">↗</span></a>
+  </section>
   <dialog id="updates-dialog" class="updates-panel" aria-labelledby="updates-title">
     <header class="updates-top">
       <h2 id="updates-title" data-i18n="updates">Обновления</h2>
